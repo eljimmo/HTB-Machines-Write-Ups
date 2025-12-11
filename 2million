@@ -1,0 +1,131 @@
+“Character is destiny.” - Heraclitus
+
+10.129.229.66
+
+ping 10.129.229.66
+PING 10.129.229.66 (10.129.229.66) 56(84) bytes of data.
+64 bytes from 10.129.229.66: icmp_seq=1 ttl=63 time=163 ms
+64 bytes from 10.129.229.66: icmp_seq=2 ttl=63 time=164 ms
+^C
+--- 10.129.229.66 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3004ms
+rtt min/avg/max/mdev = 162.352/162.767/163.729/0.558 ms
+
+TTL = 63 means its probably linux
+
+nmap -p- --min-rate 5000 -T4 10.129.229.66 -oN full_ports
+
+Starting Nmap 7.95 ( https://nmap.org ) at 2025-12-11 08:55 CST
+Warning: 10.129.229.66 giving up on port because retransmission cap hit (6).
+Nmap scan report for 10.129.229.66 (10.129.229.66)
+Host is up (0.18s latency).
+Not shown: 65533 closed tcp ports (reset)
+PORT   STATE SERVICE
+22/tcp open  ssh
+80/tcp open  http
+
+Nmap done: 1 IP address (1 host up) scanned in 21.30 seconds
+
+
+http://10.129.229.66 - autodirects to http://2million.htb/
+now we add host 10.129.229.66 to our /etc/hosts file, -> sudo nano /etc/hosts
+
+ now revisiting brings up the site correctly, - lots of static text with some light effects in the background, looks like an old HTB page, 
+
+
+a leaderboard and some machines listed, immediately we see a login page, right clicking -> View Source we can see some more information
+
+<link rel="icon" href="/images/favicon.png"> so there is an images directory 
+
+<link href="/css/htb-frontpage.css" rel="stylesheet"> -> a css directory or page
+
+<a href="/login">[ login ]</a> here is the login redirect
+
+...challenge that is presented <a href="/invite">here</a>. here we see an invite redirect 
+
+I am assuming the path lies in the invite section,
+
+I will now open devtools (F12) on the /invite redirect page, 
+we see on the right hand side-> SOURCES -> JS -> INVITEAPI.MIN.JS 
+
+eval(function(p, a, c, k, e, d) {
+    e = function(c) {
+        return c.toString(36)
+    };
+    if (!''.replace(/^/, String)) {
+        while (c--) {
+            d[c.toString(a)] = k[c] || c.toString(a)
+        }
+        k = [function(e) {
+            return d[e]
+        }];
+        e = function() {
+            return '\\w+'
+        };
+        c = 1
+    };
+    while (c--) {
+        if (k[c]) {
+            p = p.replace(new RegExp('\\b' + e(c) + '\\b','g'), k[c])
+        }
+    }
+    return p
+}(
+  '1 i(4){h 8={"4":4};$.9({a:"7",5:"6",g:8,b:\'/d/e/n\',c:1(0){3.2(0)},f:1(0){3.2(0)}})}1 j(){$.9({a:"7",5:"6",b:\'/d/e/k/l/m\',c:1(0){3.2(0)},f:1(0){3.2(0)}})}',
+  24,
+  24,
+  'response|function|log|console|code|dataType|json|POST|formData|ajax|type|url|success|api/v1|invite|error|data|var|verifyInviteCode|makeInviteCode|how|to|generate|verify'.split('|'),
+  0,
+  {}
+))
+
+
+I see a function that makes basically an API call, gives a response and makes that response = k. 
+
+k = [
+  "response", "function", "log", "console", "code", "dataType", "json", "POST",
+  "formData", "ajax", "type", "url", "success", "api/v1", "invite", "error",
+  "data", "var", "verifyInviteCode", "makeInviteCode", "how", "to",
+  "generate", "verify"
+]
+
+the main part we are lookig at is the url|success|api/v1|invite|error|data|var|verifyInviteCode|makeInviteCode|how|to|generate|verify'.split
+
+specifically the how|to|generate
+
+if we are correct and this machine is like older ones we might be able to curl that api endpoint and get a JSON response, 
+
+lets try curl -X POST http://2million.htb/api/v1/invite/how/to/generate
+
+
+curl -X POST http://2million.htb/api/v1/invite/how/to/generate  
+this is our response ->
+{"0":200,"success":1,"data":
+{"data":"Va beqre gb trarengr gur vaivgr pbqr, znxr n CBFG erdhrfg gb \/ncv\/i1\/vaivgr\/trarengr","enctype":"ROT13"},
+"hint":"Data is encrypted ... We should probbably check the encryption type in order to decrypt it..."}
+
+we got back data but its encrypted as it says, "enctype":"ROT13"
+
+so instead of asking the endpoint to "how/to/generate" we will simply tell it to generate, perhaps that will yield a code 
+
+curl -X POST http://2million.htb/api/v1/invite/generate  
+ here we made a simple change, we simply placed  "generate" after invite
+
+{"0":200,"success":1,"data":{"code":"QUtENkotRlhPRVctN1QzRkotTjkxTFQ=","format":"encoded"}} 
+
+
+awesome! we got a good code response, code":"QUtENkotRlhPRVctN1QzRkotTjkxTFQ=" but its encoded in base64, 
+
+so we need to undo that, 
+
+echo 'QUtENkotRlhPRVctN1QzRkotTjkxTFQ=' | base64 -d
+
+AKD6J-FXOEW-7T3FJ-N91LT    
+
+this is our invite code "AKD6J-FXOEW-7T3FJ-N91LT"
+
+with that code we can enter into /invite and we are redirected to a sign up page, 
+
+enter any credientials 
+
+from here we successfully entered as a user, lets take a quick break 
