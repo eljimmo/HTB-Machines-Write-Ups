@@ -129,3 +129,21 @@ with that code we can enter into /invite and we are redirected to a sign up page
 enter any credientials 
 
 from here we successfully entered as a user, lets take a quick break 
+
+anyways, we are back, looking through the page, I can't find much besides some useless clicks and home redirects, some changelogs, and some rules that dont give much info, 
+
+lets try some enumeration of pages maybe on the API? 
+
+curl http://2million.htb/api/v1/
+<html>
+<head><title>301 Moved Permanently</title></head>
+<body>
+<center><h1>301 Moved Permanently</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
+ Okay we see an Nginx web server 
+
+I didnt notice it earlier but I see under tabs an acccess route -> http://2million.htb/home/access
+
+this yields another page, 
