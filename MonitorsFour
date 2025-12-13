@@ -1,0 +1,156 @@
+“Talent hits a target no one else can hit. Genius hits a target no one else can see.” - Arthur Schopenhauer
+
+
+for todays machine, lets do a windows one, an active one, MonitorsFour - rated as Easy - Windows since we are a bit tired of linux 
+
+
+as always connect to the hackthebox VPN, then we spawn the machine, and remember that mindset + methodology is more important than just typing in random tool commands that give you too much information that is not needed.
+
+speed comes from clarity, not rushing. Do not just run scripts and expect luck, insted inspect, document and analyze. 
+
+after our machine finally boots we get an IP 10.129.5.240 ---- as always I recommend a good sporify "hacking" playlist to get in the mood, always
+
+ping 10.129.5.240                                  
+PING 10.129.5.240 (10.129.5.240) 56(84) bytes of data.
+64 bytes from 10.129.5.240: icmp_seq=1 ttl=127 time=180 ms
+64 bytes from 10.129.5.240: icmp_seq=2 ttl=127 time=177 ms
+64 bytes from 10.129.5.240: icmp_seq=3 ttl=127 time=181 ms
+^C
+--- 10.129.5.240 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2003ms
+rtt min/avg/max/mdev = 176.628/178.948/180.670/1.703 ms
+
+we have positive connection to our ip target, no packet loss, 
+
+simply typing in the IP to our browser redirects to http://monitorsfour.htb/ yet we get a "This site can’t be reached" so we need to add to /etc/hosts file
+
+sudo nano /etc/hosts
+add in at the bottom the target ip and the target machine name
+-> 
+control o -> control x
+
+cat /etc/hosts
+127.0.0.1	localhost
+
+# The following lines are desirable for IPv6 capable hosts
+::1     localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+10.129.26.134 artificial.htb
+10.129.232.59 code.htb
+10.129.229.66   2million.htb
+10.129.5.50 conversor.htb
+10.129.5.240 monitorsfour.htb
+
+
+we pull up the page, MonitorsFour is a networking and IT infrastructure services company, delivering end-to-end networking solutions. That obviously needs our help. we see several issues already. 
+
+lets start the enumeration process
+
+nmap -sC -sV monitorsfour.htb -oA monitorsfour-services
+
+Starting Nmap 7.95 ( https://nmap.org ) at 2025-12-13 16:06 CST
+Nmap scan report for monitorsfour.htb (10.129.5.240)
+Host is up (0.17s latency).
+Not shown: 998 filtered tcp ports (no-response)
+PORT     STATE SERVICE VERSION
+80/tcp   open  http    nginx
+| http-cookie-flags: 
+|   /: 
+|     PHPSESSID: 
+|_      httponly flag not set
+|_http-title: MonitorsFour - Networking Solutions
+5985/tcp open  http    Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+|_http-title: Not Found
+|_http-server-header: Microsoft-HTTPAPI/2.0
+Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 30.45 seconds
+
+
+key observations: nginx web server
+The site sets a PHPSESSID cookie - HttpOnly flag is not set
+Port 5985/tcp is open — WinRM (Microsoft HTTPAPI 2.0) -> some research tells us that this is for powershell access- admin access
+
+from here we go to the login page, very simple, we go to inspect -> 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MonitorsFour - Login</title>
+    <link rel="icon" type="image/x-icon" href="static/admin/assets/images/logo.ico">
+    <!-- Global stylesheets -->
+    <link href="https://fonts.googleapis.com/css?family=Roboto:400,300,100,500,700,900" rel="stylesheet" type="text/css">
+    <link href="static/admin/assets/css/icons/icomoon/styles.css" rel="stylesheet" type="text/css">
+    <link href="static/admin/assets/css/minified/bootstrap.min.css" rel="stylesheet" type="text/css">
+    <link href="static/admin/assets/css/minified/core.min.css" rel="stylesheet" type="text/css">
+    <link href="static/admin/assets/css/minified/components.min.css" rel="stylesheet" type="text/css">
+    <link href="static/admin/assets/css/minified/colors.min.css" rel="stylesheet" type="text/css">
+    <!-- /global stylesheets -->
+
+    <!-- Core JS files -->
+    <script type="text/javascript" src="static/admin/assets/js/plugins/loaders/pace.min.js"></script>
+    <script type="text/javascript" src="static/admin/assets/js/core/libraries/jquery.min.js"></script>
+    <script type="text/javascript" src="static/admin/assets/js/core/libraries/bootstrap.min.js"></script>
+    <script type="text/javascript" src="static/admin/assets/js/plugins/loaders/blockui.min.js"></script>
+    <!-- /core JS files -->
+
+
+------------------
+
+and we see something alarming, type="text/javascript" src="static/admin/assets/js/core/libraries/jquery.min.js"></script>
+
+yes the folder named admin, and admin panel / admin theme in usage, the login page is probably part of an admin module. With assests being loaded from static/admin/assets/... this is lazy cmon guys 
+
+on the main page -> inspect -> 
+  <!-- jQuery Min JS -->
+  <script src="static/js/jquery-min.js"></script>
+
+  <!-- Popper Min JS -->
+  <script src="static/js/popper.min.js"></script>
+  <!-- Bootstrap Min JS -->
+  <script src="static/js/bootstrap.min.js"></script>
+  <!-- Owl Carousel Min JS -->
+  <script src="static/js/owl.carousel.min.js"></script>
+  <!-- Owl Plugins JS -->
+  <script src="static/js/plugins.js"></script>
+  <!-- Smooth scroll JS -->
+  <script src="static/js/smoothscroll.js"></script>
+
+
+  <!-- Custom JS -->
+  <script src="static/js/custom.js"></script> some more site-wide front-end behavior, anyways lets see feroxbuster a strong directory/ "Forced Browsing" enumeration tool 
+
+
+(-----㉿----)-[~]
+└─$ feroxbuster -u http://monitorsfour.htb \
+  -w /usr/share/seclists/Discovery/Web-Content/raft-medium-words.txt \
+  -x php,txt,html,bak,old,zip
+I wont post everything because it will only be redundent, but a bit is 200      GET       96l      239w     4340c http://monitorsfour.htb/views/login.php
+200      GET      338l      982w    13688c http://monitorsfour.htb/views/index.php
+200      GET      215l      592w     9229c http://monitorsfour.htb/views/admin/api.php
+200      GET      321l      800w    13987c http://monitorsfour.htb/views/admin/users.php
+301      GET        7l       11w      162c http://monitorsfour.htb/controllers => http://monitorsfour.htb/controllers/
+200      GET       20l       36w      302c http://monitorsfour.htb/views/admin/footer.php
+200      GET      288l      862w    12112c http://monitorsfour.htb/views/
+
+----> this is a huge enumeration win, and sloppy by the monitorsfour site devs. 
+
+
+T       96l      239w     4340c http://monitorsfour.htb/views/login.php
+200      GET      338l      982w    13688c http://monitorsfour.htb/views/index.php
+200      GET      215l      592w     9229c http://monitorsfour.htb/views/admin/api.php
+200      GET      321l      800w    13987c http://monitorsfour.htb/views/admin/users.php
+301      GET        7l       11w      162c http://monitorsfour.htb/controllers => http://monitorsfour.htb/controllers/
+
+
+
+
+
+
+
+
+
