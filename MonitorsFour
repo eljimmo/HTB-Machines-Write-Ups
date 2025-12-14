@@ -389,3 +389,42 @@ Add the vhost to /etc/hosts
 
 echo "10.129.6.1 ecacti.monitorsfour.htb" | sudo tee -a /etc/hosts
 
+
+So what is Cacti?
+Cacti is a PHP network monitoring tool, usuaally very vulnerable & not recommended. 
+
+Cacti is also mainly used internally. 
+
+since Cacti is only internally accessed, we need to pivot our thinking towards architecture. Remember, Cacti is internal-only. So after some youtube videos on Cacti -> 
+the server nginx blocks direct access to cacti, although the main app "talks" to cacti, -> hence, the main app-> cacti communication path should be exploitable. 
+
+The box is named MonitorsFour, why? because we have proven that the architecture is based on multiple layers of "monitoring" 
+
+the public site ---> monitorsfour.htb
+
+internal admin dashboard ---> /admin/ views (found by forced browsing)
+
+backend API layer ---> /api/v1/
+
+internal  service (Cacti) ---> ecacti.monitorsfour.htb (blocked externally,)
+
+Total of four application layers. so while Cacti is blocked to outsiders, the server nginx trusts internal routing.... 
+
+so here we need an endpoint that send requests (the server nginx trusts internal routing) ---> talks to Cacti, 
+
+
+we need a page that MonitorsFour makes outbound HTTP requests. & returns an internal address +  destination is derived from user input + can be tampered with 
+
+---> http://monitorsfour.htb/user ---> {"error":"Missing token parameter"} ---> inspect -> network, Request URL http://monitorsfour.htb/user Request Method GET Status Code 200 OK Remote Address 10.129.6.1:80
+Referrer Policy strict-origin-when-cross-origin ontent-type text/html; charset=UTF-8 date Sun, 14 Dec 2025 01:05:05 GMT expires Thu, 19 Nov 1981 08:52:00 GMT pragma no-cache server nginx
+
+now why is this the key???
+
+Because /user page is an endpoint that is meant to be called by something else... --> “Missing token parameter” ---> should return “Please log in”. --> makes a good candidate for SSRF --->  makes outbound HTTP requests ---> 
+returns an internal address / destination internal ---> destination from user input is therefore tamperable!!
+
+
+
+
+
+
