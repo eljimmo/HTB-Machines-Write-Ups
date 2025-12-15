@@ -213,3 +213,14 @@ After being logged out, attempting to re-register with the same email triggered 
 This confirms the initial account was created successfully and indicates information disclosure via unhandled SQL exceptions.
 
 at this point my virtualbox machine froze........ I was runninf feroxbuster and gobuster at the same time, mmaybe thats what did it, anyways we will resume soon 
+
+
+
+
+----------- this not regarding the box bu our freeze lol
+Total RAM: 1.9 GB
+Available: ~830 MB
+very low for Kali + browser + Burp ----> explains the freeze. lol 
+
+
+-----------------
