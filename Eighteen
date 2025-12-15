@@ -223,4 +223,105 @@ Available: ~830 MB
 very low for Kali + browser + Burp ----> explains the freeze. lol 
 
 
+----
+
+we are back, after deleting partitions, and creating more space on /sda/dev we have a stable kali, now we can continue, 
+
+-----> “When the way is blocked, change your approach — not your goal.”
+— Seneca
+
+
+----------> 
+
+
+
+After authenticating via the Burp browser, the application issues
+a valid Flask session cookie. Access to /admin remains denied for
+authenticated users, confirming a server-side authorization check.
+Session cookies are modified per request, likely due to flash messages.
+Next steps focus on identifying the admin condition (role, ID, or logic-based).
+ 
 -----------------
+
+
+hmmmm we're hitting dead ends here, lets refocus our approach, we missed something so we try for a bit a few feroxbusters and some more gobusters
+
+we find nada, zip, lets try the nmap again ------->  nmap -p- --min-rate=1000 -T4 -Pn -oN nmap/initial-ports.txt 10.129.7.36
+
+Starting Nmap 7.95 ( https://nmap.org ) at 2025-12-15 10:34 CST
+Nmap scan report for eighteen.htb (10.129.7.36)
+Host is up (0.17s latency).
+Not shown: 65532 filtered tcp ports (no-response)
+PORT     STATE SERVICE
+80/tcp   open  http
+1433/tcp open  ms-sql-s
+5985/tcp open  wsman
+
+Nmap done: 1 IP address (1 host up) scanned in 131.24 seconds
+                                                                                
+┌──(alienware㉿ALNWRE)-[~]
+└─$ nmap -p 80,135,139,445,1433,5985 -sC -sV -oN nmap/deep-scan.txt 10.129.7.36
+Starting Nmap 7.95 ( https://nmap.org ) at 2025-12-15 10:37 CST
+Nmap scan report for eighteen.htb (10.129.7.36)
+Host is up (0.20s latency).
+
+PORT     STATE    SERVICE      VERSION
+80/tcp   open     http         Microsoft IIS httpd 10.0
+|_http-server-header: Microsoft-IIS/10.0
+|_http-title: Welcome - eighteen.htb
+135/tcp  filtered msrpc
+139/tcp  filtered netbios-ssn
+445/tcp  filtered microsoft-ds
+1433/tcp open     ms-sql-s     Microsoft SQL Server 2022 16.00.1000.00; RTM
+| ms-sql-info: 
+|   10.129.7.36:1433: 
+|     Version: 
+|       name: Microsoft SQL Server 2022 RTM
+|       number: 16.00.1000.00
+|       Product: Microsoft SQL Server 2022
+|       Service pack level: RTM
+|       Post-SP patches applied: false
+|_    TCP port: 1433
+| ms-sql-ntlm-info: 
+|   10.129.7.36:1433: 
+|     Target_Name: EIGHTEEN
+|     NetBIOS_Domain_Name: EIGHTEEN
+|     NetBIOS_Computer_Name: DC01
+|     DNS_Domain_Name: eighteen.htb
+|     DNS_Computer_Name: DC01.eighteen.htb
+|     DNS_Tree_Name: eighteen.htb
+|_    Product_Version: 10.0.26100
+| ssl-cert: Subject: commonName=SSL_Self_Signed_Fallback
+| Not valid before: 2025-12-15T22:51:30
+|_Not valid after:  2055-12-15T22:51:30
+|_ssl-date: 2025-12-15T23:38:11+00:00; +7h00m00s from scanner time.
+5985/tcp open     http         Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+|_http-title: Not Found
+|_http-server-header: Microsoft-HTTPAPI/2.0
+Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: mean: 6h59m59s, deviation: 0s, median: 6h59m59s
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 18.90 seconds
+
+
+okay, maybe we should try the credientials more, we did earlier, but to Evil-WinRM shell v3.7 not mssqlclient, so here we go-->
+
+impacket-mssqlclient kevin@10.129.7.36 password:iNa2we6haRj2gaw! and viola we got it, later than we'd like to admit, 
+
+this whole time we missed a simple step and took it up a notch in complexity when we had the answer in front of us 
+
+-----------> 
+Once inside the database, the operating system is never far away.
+---------->
+MSSQL access was obtained via SQL authentication using provided credentials.
+The user connects successfully to the master database and is mapped to the
+guest user context, indicating further privilege escalation is required.
+
+
+
+after poking around -----> not sysadmin & cannot directly use xp_cmdshell, we do have SQL access 
+
+
