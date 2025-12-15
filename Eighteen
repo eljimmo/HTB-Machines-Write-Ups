@@ -1,0 +1,215 @@
+Hack The Box — Eighteen
+
+The more you know, the more you realize you know nothing. — Socrates
+
+Difficulty: Easy
+OS: Windows
+Category: Windows / Initial Access via Credentials
+
+Starting Credentials
+kevin : iNa2we6haRj2gaw!
+
+$ ping 10.129.6.201 
+PING 10.129.6.201 (10.129.6.201) 56(84) bytes of data.
+64 bytes from 10.129.6.201: icmp_seq=1 ttl=127 time=162 ms
+64 bytes from 10.129.6.201: icmp_seq=2 ttl=127 time=166 ms
+64 bytes from 10.129.6.201: icmp_seq=3 ttl=127 time=164 ms
+^C
+--- 10.129.6.201 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2002ms
+rtt min/avg/max/mdev = 162.214/164.248/166.233/1.641 ms
+                                                                                
+┌──(alienware㉿ALNWRE)-[~]
+
+
+---> cat /etc/hosts
+127.0.0.1 localhost 127.0.1.1 ALNWRE.0.2.15 ALNWRE
+
+# The following lines are desirable for IPv6 capable hosts
+::1     localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+10.129.26.134 artificial.htb
+10.129.232.59 code.htb
+10.129.229.66   2million.htb
+10.129.5.50 conversor.htb
+10.129.6.1 monitorsfour.htb
+10.129.6.1 ecacti.monitorsfour.htb
+10.129.6.201 eighteen.htb/
+
+
+----------> 
+
+web app overview — eighteen.htb seems to be a personal financing web app, helping users manage expenses. "Your Complete Financial Planning Solution"
+"Your Complete Financial Planning Solution" -> "Track Expenses" -> "Plan Your Future"
+
+
+nmap -sC -sV eighteen.htb 
+
+Starting Nmap 7.95 ( https://nmap.org ) at 2025-12-14 19:11 CST
+Nmap scan report for eighteen.htb (10.129.6.201)
+Host is up (0.18s latency).
+Not shown: 997 filtered tcp ports (no-response)
+PORT     STATE SERVICE  VERSION
+80/tcp   open  http     Microsoft IIS httpd 10.0
+|_http-title: Welcome - eighteen.htb
+|_http-server-header: Microsoft-IIS/10.0
+1433/tcp open  ms-sql-s Microsoft SQL Server 2022 16.00.1000.00; RTM
+| ms-sql-ntlm-info: 
+|   10.129.6.201:1433: 
+|     Target_Name: EIGHTEEN
+|     NetBIOS_Domain_Name: EIGHTEEN
+|     NetBIOS_Computer_Name: DC01
+|     DNS_Domain_Name: eighteen.htb
+|     DNS_Computer_Name: DC01.eighteen.htb
+|     DNS_Tree_Name: eighteen.htb
+|_    Product_Version: 10.0.26100
+| ms-sql-info: 
+|   10.129.6.201:1433: 
+|     Version: 
+|       name: Microsoft SQL Server 2022 RTM
+|       number: 16.00.1000.00
+|       Product: Microsoft SQL Server 2022
+|       Service pack level: RTM
+|       Post-SP patches applied: false
+|_    TCP port: 1433
+| ssl-cert: Subject: commonName=SSL_Self_Signed_Fallback
+| Not valid before: 2025-12-15T07:43:42
+|_Not valid after:  2055-12-15T07:43:42
+|_ssl-date: 2025-12-15T08:11:44+00:00; +6h59m59s from scanner time.
+5985/tcp open  http     Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+|_http-title: Not Found
+|_http-server-header: Microsoft-HTTPAPI/2.0
+Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: mean: 6h59m58s, deviation: 0s, median: 6h59m58s
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 32.69 seconds
+
+
+
+-------------> 
+
+Nmap Analysis — eighteen.htb
+📡 Open Services
+Port 80 — HTTP (IIS 10.0)
+
+Service: Microsoft IIS 10.0
+
+
+Port 1433 — MSSQL (Microsoft SQL Server 2022)
+
+Version: Microsoft SQL Server 2022 RTM
+
+Hostname: DC01.eighteen.htb
+
+Domain: eighteen.htb
+
+Port 5985 — WinRM (HTTPAPI 2.0)
+
+Service: Windows Remote Management (HTTP)
+
+Observation:
+
+WinRM is exposed
+
+-------> hey cool WinRM again, lets try evil-winrm -i eighteen.htb -u kevin -p 'iNa2we6haRj2gaw!'
+
+
+---------> alienware㉿ALNWRE)-[~]
+└─$ evil-winrm -i eighteen.htb -u kevin -p 'iNa2we6haRj2gaw!'
+                                        
+Evil-WinRM shell v3.7
+                                        
+Warning: Remote path completions is disabled due to ruby limitation: undefined method `quoting_detection_proc' for module Reline
+                                        
+Data: For more information, check Evil-WinRM GitHub: https://github.com/Hackplayers/evil-winrm#Remote-path-completion
+                                        
+Info: Establishing connection to remote endpoint
+                                        
+Error: An error of type WinRM::WinRMAuthorizationError happened, message is WinRM::WinRMAuthorizationError
+                                        
+Error: Exiting with code 1
+ lol didnt work, cant do too easy right,
+
+--------------> anywways 
+
+lets recap a bit 
+
+MSSQL is externally accessible with SQL authentication
+
+lets try for gobuster directory enumeration 
+
+gobuster dir -u http://eighteen.htb -w /usr/share/wordlists/dirb/common.txt -x php,txt,html
+
+===============================================================
+Gobuster v3.8
+by OJ Reeves (@TheColonial) & Christian Mehlmauer (@firefart)
+===============================================================
+[+] Url:                     http://eighteen.htb
+[+] Method:                  GET
+[+] Threads:                 10
+[+] Wordlist:                /usr/share/wordlists/dirb/common.txt
+[+] Negative Status codes:   404
+[+] User Agent:              gobuster/3.8
+[+] Extensions:              php,txt,html
+[+] Timeout:                 10s
+===============================================================
+Starting gobuster in directory enumeration mode
+===============================================================
+/admin                (Status: 302) [Size: 199] [--> /login]
+/dashboard            (Status: 302) [Size: 199] [--> /login]
+/features             (Status: 200) [Size: 2822]
+/login                (Status: 200) [Size: 1961]
+/logout               (Status: 302) [Size: 189] [--> /]
+
+/admin and /dashboard are therefore protected, all cool, 
+
+This is now a web-first attack path,
+
+we still have the "As is common in real life Windows penetration tests, you will start the Eighteen box with credentials for the following account: kevin / iNa2we6haRj2gaw!"
+
+this is most proble for the login page, 
+
+the password and username given did not work for the login page, so we regristerd and viola, we got in, a good misdirection 
+
+
+after entereing we get a dashboard for expense reporting and budgeting, 
+
+we attempted SQL-style input via the expense functionality ->  inputs were accepted as data, not executed as SQL. --->  webapp is not directly concatenating user input into SQL queries for expense creation.
+
+so therefore Inputs are treated as strings or numeric fields /SQL keywords are stored and displayed verbatim /  not an injection point
+
+---------------------------------
+
+### Expense Deletion Endpoint
+
+Deletion is performed via a POST route using a path parameter:
+
+- `POST /delete_expense/<id>` → `302 Found` redirect to `/dashboard`
+
+suggests a backend handler that deletes an expense by ID then redirects.
+Primary hypothesis is an IDOR/authorization flaw if the server fails to verify
+expense ownership (e.g., deleting IDs not belonging to the current user).
+
+=------------------
+
+hmmm we were logged out, tried relogging in, either we didint put our username or pw correclty, so we got a rejectiom went to create a new user under the same credetials and look at this Registration failed. Username or email may already exist. 
+('23000', "[23000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Violation of UNIQUE KEY constraint 'UQ__users__AB6E6164CD0BCC05'. 
+Cannot insert duplicate key in object 'dbo.users'. 
+The duplicate key value is (user@GMAIL.COM). (2627) (SQLExecDirectW); [23000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]The statement has been terminated. (3621)")
+
+### Registration Error Disclosure (MSSQL / ODBC)
+
+After being logged out, attempting to re-register with the same email triggered a verbose DB error:
+
+- Backend uses Microsoft SQL Server via **ODBC Driver 17**
+- Registration inserts into `dbo.users`
+- Email is enforced as UNIQUE (duplicate key error for `user@GMAIL.COM`)
+- Application leaks SQLSTATE + driver + table/schema + constraint details
+
+This confirms the initial account was created successfully and indicates information disclosure via unhandled SQL exceptions.
+
+at this point my virtualbox machine froze........ I was runninf feroxbuster and gobuster at the same time, mmaybe thats what did it, anyways we will resume soon 
