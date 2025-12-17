@@ -169,4 +169,10 @@ Password: purPLE9795!@
 ---------------------
 
 
-from here lets take a small break, wwe will be back soon
+Before we go furher, letd make some key understandings of concepts, 
+What “UNC path injection” really means
+UNC path injection -> we are providing a network path instead of a local one -> SQL Server trusts it
+not a "flaw" or an exploit, rather by design, so fare no exploit code has ran, no shell has been made or spawned, no user configuration changes, 
+only thing we did was send the NTLM credentials across a trust boundary.
+
+what is NTLM? NTLM is a Windows authentication protocol, abusing Windows trust, by a legitimate feature and design, starting with a low-privileged position we sent credentials.  
