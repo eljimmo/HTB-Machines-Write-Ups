@@ -168,7 +168,6 @@ Password: purPLE9795!@
 
 ---------------------
 
-
 Before we go furher, letd make some key understandings of concepts, 
 What “UNC path injection” really means
 UNC path injection -> we are providing a network path instead of a local one -> SQL Server trusts it
@@ -176,3 +175,115 @@ not a "flaw" or an exploit, rather by design, so fare no exploit code has ran, n
 only thing we did was send the NTLM credentials across a trust boundary.
 
 what is NTLM? NTLM is a Windows authentication protocol, abusing Windows trust, by a legitimate feature and design, starting with a low-privileged position we sent credentials.  
+
+-----------------------------
+
+
+NOW WE TRIED THE CREDIENTIALS ON RPC / SMB / LDAP YET THEY ALL EITHER FAILED OR TIMED OUT 
+
+SO WE ENUM AGAIN JUST TO CONFIRM SOME THINGS 88,135,389,445,464,636,5985,5986 → ALL FILTERED
+
+------------
+SO WE TRIED OUR NEWLY ACQUIRED CREDINTAILS ON mssqlsvc  AND IT WORKED! TO A DEGREE, 
+
+Before (SQL login)
+SQL login: scott Database user: guest Auth type: SQL authentication Privileges: constrained
+----
+Now (Windows auth)
+Windows principal: SIGNED\mssqlsvc Database user: still guest Auth type: Windows authentication Privileges: not yet known
+
+SO NOW THAT WE ARE IN TIME TO SEE "WHERE" WE ARE AT IN mssqlsvc
+
+---------------
+we try to enumerate our situation 
+SQL (SIGNED\mssqlsvc guest@master)> SELECT SYSTEM_USER; --------------- SIGNED\mssqlsvc SQL (SIGNED\mssqlsvc guest@master)> SELECT USER_NAME(); ----- guest SQL 
+(SIGNED\mssqlsvc guest@master)> SELECT IS_SRVROLEMEMBER('sysadmin'); - 
+0 SQL (SIGNED\mssqlsvc guest@master)> EXEC master..xp_logininfo 'signed.htb\mssqlsvc', 'all'; 
+ERROR(DC01): Line 1: The EXECUTE permission was denied on the object 'xp_logininfo', database 'mssqlsystemresource', schema 'sys'. SQL 
+(SIGNED\mssqlsvc guest@master)> EXEC master..xp_logininfo 'mssqlsvc', 'all'; ERROR(DC01): 
+Line 1: The EXECUTE permission was denied on the object 'xp_logininfo', database 'mssqlsystemresource', schema 'sys'. SQL (SIGNED\mssqlsvc guest@master)>
+
+soo TDLR: What your results confirm
+Identity context, SYSTEM_USER = SIGNED\mssqlsvc 
+operating as the domain service account inside SQL.
+Database user mapping  --->
+USER_NAME() = guest , hence  login is still mapped to guest in master.
+Server role, IS_SRVROLEMEMBER('sysadmin') = 0 
+So even as the service account, you are not sysadmin.
+xp_logininfo denied
+
+EXECUTE permission denied on xp_logininfo
+
+### Pivot: Windows Auth to MSSQL (SIGNED\mssqlsvc)
+
+- SYSTEM_USER: SIGNED\mssqlsvc
+- USER_NAME(): guest
+- sysadmin: No (0)
+
+Attempted AD/group enumeration via xp_logininfo:
+- Result: EXECUTE denied on xp_logininfo
+- Conclusion: Extended proc enumeration restricted; privileges remain limited.
+
+
+------------------------------------
+
+SQL (SIGNED\mssqlsvc guest@master)> SELECT 'xp_dirtree' AS obj, HAS_PERMS_BY_NAME('xp_dirtree','OBJECT','EXECUTE') AS can_exec; obj can_exec ---------- -------- b'xp_dirtree' 1 SQL (SIGNED\mssqlsvc guest@master)> 
+SELECT 'xp_fileexist' AS obj, HAS_PERMS_BY_NAME('xp_fileexist','OBJECT','EXECUTE') AS can_exec; obj can_exec ------------ -------- b'xp_fileexist' 1 SQL (SIGNED\mssqlsvc guest@master)> 
+SELECT 'xp_subdirs' AS obj, HAS_PERMS_BY_NAME('xp_subdirs','OBJECT','EXECUTE') AS can_exec; obj can_exec ---------- -------- b'xp_subdirs' 0 SQL (SIGNED\mssqlsvc guest@master)> 
+SELECT 'xp_logininfo' AS obj, HAS_PERMS_BY_NAME('xp_logininfo','OBJECT','EXECUTE') AS can_exec; obj can_exec ------------ -------- b'xp_logininfo' 0 SQL (SIGNED\mssqlsvc guest@master)> 
+SELECT name, 
+value_in_use FROM sys.configurations WHERE name IN ('xp_cmdshell','Ole Automation Procedures','clr enabled'); SQL (SIGNED\mssqlsvc guest@master)>
+
+
+------------------
+summary:
+xp_dirtree	1	Can trigger filesystem/UNC access behavior
+xp_fileexist	1	Can test existence of files/paths (often useful for “does this file/path exist?” checks)
+xp_subdirs	0	Directory listing via this proc is blocked
+xp_logininfo	0	Group/user info enumeration via this proc is blocked
+
+-------->> 
+Context:
+- USER_NAME(): guest
+- sysadmin: 0
+
+### Extended Proc Execution Checks
+| Proc | EXECUTE | Notes |
+|---|---:|---|
+| xp_dirtree | 1 | Filesystem/UNC interaction possible |
+| xp_fileexist | 1 | Can test file/path existence |
+| xp_subdirs | 0 | Denied |
+| xp_logininfo | 0 | Denied (cannot enumerate group membership this way) |
+
+Observations:
+- Metadata enumeration for extended procs via master.sys.objects (type='X') returned no rows (likely metadata visibility restriction).
+- sys.configurations query produced no output (needs visibility check).
+
+----------------------------------------
+
+SQL (SIGNED\mssqlsvc guest@master)> SELECT SUSER_SID('SIGNED\IT'); ----------------------------------------------------------- b'0105000000000005150000005b7bb0f398aa2245ad4a1ca451040000' 
+SQL (SIGNED\mssqlsvc guest@master)>
+SELECT * FROM sys.login_token; principal_id sid name type usage
+------------  2 b'02' public 
+SERVER ROLE GRANT OR DENY 268 b'0105000000000005150000005b7bb0f398aa2245ad4a1ca401020000' SIGNED\
+Domain Users WINDOWS GROUP GRANT OR DENY 268 b'0105000000000005150000005b7bb0f398aa2245ad4a1ca401020000' SIGNED\
+Domain Users WINDOWS GROUP GRANT OR DENY 0 b'010100000000000100000000' \
+Everyone WINDOWS GROUP GRANT OR DENY 0 b'01020000000000052000000021020000' 
+BUILTIN\Users WINDOWS GROUP GRANT OR DENY 0 b'0102000000000005200000002a020000' BUILTIN\
+Pre-Windows 2000 Compatible Access WINDOWS GROUP GRANT OR DENY 0 b'010100000000000502000000' NT AUTHORITY\
+NETWORK WINDOWS GROUP GRANT OR DENY 0 b'01010000000000050b000000' NT AUTHORITY\
+Authenticated Users WINDOWS GROUP GRANT OR DENY 0 b'01010000000000050f000000' NT AUTHORITY\
+This Organization WINDOWS GROUP GRANT OR DENY 0 b'0102000000000005400000000a000000' 
+NT AUTHORITY\NTLM Authentication WINDOWS GROUP GRANT OR DENY
+
+
++++++++++++
+### Confirmed: Group-based sysadmin
+- SIGNED\IT is a member of the sysadmin server role on MSSQL.
+
+### Membership check (SIGNED\mssqlsvc)
+- sys.login_token shows SIGNED\Domain Users and builtin groups.
+- SIGNED\IT not present?? → SIGNED\mssqlsvc does not inherit sysadmin via SIGNED\IT (based on current evidence)?
+
+Confirmed Misconfiguration--> SIGNED\IT has sysadmin role on MSSQL.  --------> mssqlsvc is member of this group (indirectly grants access when group is in ticket)
+
